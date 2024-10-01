@@ -168,3 +168,4 @@ cython_debug/
 .DS_Store
 src/data/
 **cifar10.tgz
+src/data/*
