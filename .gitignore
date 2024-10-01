@@ -166,3 +166,5 @@ cython_debug/
 *.pdf
 
 .DS_Store
+src/data/
+**cifar10.tgz
