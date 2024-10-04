@@ -34,6 +34,7 @@ from torchvision.utils import make_grid
 class CIFAR10:
 
     def __init__(self, val_size=500, batch_size=100, subset_size=None):
+
         self.dataset_url = "https://s3.amazonaws.com/fast-ai-imageclas/cifar10.tgz"
         self.data_dir = "./data/cifar10"
 
@@ -42,8 +43,12 @@ class CIFAR10:
         self.dataset = ImageFolder(self.data_dir + "/train", transform=ToTensor())
 
         if subset_size is not None:
-            indices = torch.randperm(len(self.dataset))[:subset_size]
-            self.dataset = Subset(self.dataset, indices).dataset
+            if val_size > subset_size:
+                raise ValueError(
+                    f"Validation size ({val_size}) cannot be larger than subset size ({subset_size})."
+                )
+            indices = range(0, subset_size)
+            self.dataset = Subset(self.dataset, indices)
 
         from torch.utils.data import random_split
 
