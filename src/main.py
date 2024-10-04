@@ -6,8 +6,9 @@ import os
 import csv
 import matplotlib.pyplot as plt
 from datetime import datetime
-from models import CNNModel
+from models import MODELS
 from data_handlers import CIFAR10
+from opacus import PrivacyEngine
 
 
 def parse_args():
@@ -53,18 +54,11 @@ args = parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
 
-MODELS = {
-    "WideResNet": torch.hub.load(
-        "pytorch/vision:v0.10.0", "wide_resnet50_2", pretrained=False
-    ),
-    "CNN": CNNModel(),
-}
-
 
 model = MODELS[args.model].to(device)
 
 OPTIMIZERS = {
-    "Adam": optim.Adam(model.parameters(), lr=args.lr),
+    "Adam": optim.SGD(model.parameters(), lr=args.lr),
 }
 
 optimizer = OPTIMIZERS[args.optimizer]
@@ -90,10 +84,21 @@ test_losses = []
 
 
 def train(epoch):
+    global model, optimizer
     model.train()
     running_loss = 0
 
     dl = CIFAR10(subset_size=args.subset_size).train_dl
+
+    privacy_engine = PrivacyEngine()
+
+    model, optimizer, dl = privacy_engine.make_private(
+        module=model,
+        optimizer=optimizer,
+        data_loader=dl,
+        noise_multiplier=1.1,
+        max_grad_norm=1.0,
+    )
 
     for batch_idx, (data, target) in enumerate(dl):
         data, target = data.to(device), target.to(device)
