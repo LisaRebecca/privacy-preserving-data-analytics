@@ -169,3 +169,4 @@ cython_debug/
 src/data/
 **cifar10.tgz
 src/data/*
+src/experiments/*
