@@ -14,8 +14,9 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Train a differentially private neural network"
     )
-    parser.add_argument("--run_name", type=str, default="DDPM")
+    parser.add_argument("--model", default="WideResNet")
     parser.add_argument("--save_results", default=True)
+    parser.add_argument("--optimizer", default="Adam")
     parser.add_argument("--model_snapshot_epochs", default=20)
     parser.add_argument(
         "--subset_size",
@@ -52,9 +53,21 @@ args = parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
 
-model = CNNModel().to(device)
+MODELS = {
+    "WideResNet": torch.hub.load(
+        "pytorch/vision:v0.10.0", "wide_resnet50_2", pretrained=False
+    ),
+    "CNN": CNNModel(),
+}
 
-optimizer = optim.Adam(model.parameters(), lr=args.lr)
+
+model = MODELS[args.model].to(device)
+
+OPTIMIZERS = {
+    "Adam": optim.Adam(model.parameters(), lr=args.lr),
+}
+
+optimizer = OPTIMIZERS[args.optimizer]
 
 loss_fn = nn.CrossEntropyLoss()
 
