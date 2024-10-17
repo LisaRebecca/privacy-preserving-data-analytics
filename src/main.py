@@ -18,7 +18,6 @@ def parse_args():
     parser.add_argument("--model", default="WideResNet")
     parser.add_argument("--save_results", default=True)
     parser.add_argument("--optimizer", default="Adam")
-    parser.add_argument("--model_snapshot_epochs", default=20)
     parser.add_argument(
         "--subset_size",
         default=None,
@@ -33,7 +32,7 @@ def parse_args():
         help="input batch size for training (default: 64)",
     )
     parser.add_argument(
-        "--epochs", type=int, default=2, help="number of epochs to train (default: 5)"
+        "--epochs", type=int, default=2, help="number of epochs to train (default: 2)"
     )
     parser.add_argument(
         "--lr", type=float, default=0.001, help="learning rate (default: 0.001)"
@@ -58,24 +57,14 @@ device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else 
 model = MODELS[args.model].to(device)
 
 OPTIMIZERS = {
-    "Adam": optim.SGD(model.parameters(), lr=args.lr),
+    "SGD": optim.SGD(model.parameters(), lr=args.lr),
+    "SGDM": optim.SGD(model.parameters(), lr=args.lr, momentum=0.1),
+    "Adam": optim.Adam(model.parameters(), lr=args.lr),
 }
 
 optimizer = OPTIMIZERS[args.optimizer]
 
 loss_fn = nn.CrossEntropyLoss()
-
-# Create directory for experiment
-if args.save_experiment:
-    current_date = datetime.now().strftime("%Y-%b-%d %Hh%Mmin")
-    experiment_dir = f"./experiments/{current_date}"
-    os.makedirs(experiment_dir, exist_ok=True)
-
-    # Save args to a file
-    args_file = os.path.join(experiment_dir, "config.txt")
-    with open(args_file, "w") as f:
-        for arg, value in vars(args).items():
-            f.write(f"{arg}: {value}\n")
 
 
 # Tracking loss
@@ -152,6 +141,18 @@ if __name__ == "__main__":
     for epoch in range(1, args.epochs + 1):
         train(epoch)
         test()
+
+    # Create directory for experiment
+    if args.save_experiment:
+        current_date = datetime.now().strftime("%Y-%b-%d %Hh%Mmin")
+        experiment_dir = f"./experiments/{current_date}"
+        os.makedirs(experiment_dir, exist_ok=True)
+
+        # Save args to a file
+        args_file = os.path.join(experiment_dir, "config.txt")
+        with open(args_file, "w") as f:
+            for arg, value in vars(args).items():
+                f.write(f"{arg}: {value}\n")
 
     # Save losses to a CSV
     if args.save_experiment:
