@@ -33,12 +33,12 @@ from torchvision.utils import make_grid
 
 class CIFAR10:
 
-    def __init__(self, val_size=500, batch_size=100, subset_size=None):
+    def __init__(self, val_size=50, batch_size=100, subset_size=None):
 
         self.dataset_url = "https://s3.amazonaws.com/fast-ai-imageclas/cifar10.tgz"
         self.data_dir = "./data/cifar10"
 
-        self.download_data()
+        # self.download_data()
 
         self.dataset = ImageFolder(self.data_dir + "/train", transform=ToTensor())
 
