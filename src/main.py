@@ -10,6 +10,7 @@ from models import MODELS
 from data_handlers import CIFAR10
 from opacus import PrivacyEngine
 from DiceSGD.trainers import DiceSGD
+from DynamicSGD.trainers import DynamicSGD
 import logging
 import timm
 from opacus.validators import ModuleValidator
@@ -56,6 +57,11 @@ def parse_args():
         default=64,
         help="input batch size for training (default: 64)",
     )
+
+    parser.add_argument(
+        "--epsilon", type=float, default=1, help="epsilon = privacy budget (default: 1)"
+    )
+
     parser.add_argument(
         "--epochs", type=int, default=2, help="number of epochs to train (default: 2)"
     )
@@ -148,16 +154,18 @@ if __name__ == "__main__":
     # for name, param in model.named_parameters():
     # print(name, param.requires_grad)
 
-    if args.algo == "DiceSGD":
-        val_size = int(0.15 * args.subset_size)
+    val_size = int(0.15 * args.subset_size)
         # Initialize the CIFAR10 class
-        cifar10_data = CIFAR10(
-            val_size=val_size, batch_size=args.batch_size, subset_size=args.subset_size
-        )
+    cifar10_data = CIFAR10(
+        val_size=val_size, batch_size=args.batch_size, subset_size=args.subset_size
+    )
 
-        # Access the DataLoaders
-        train_dl = cifar10_data.train_dl
-        test_dl = cifar10_data.val_dl
+    # Access the DataLoaders
+    train_dl = cifar10_data.train_dl
+    test_dl = cifar10_data.val_dl
+
+    if args.algo == "DiceSGD":
+        
         DiceSGD(
             model,
             train_dl,
@@ -178,6 +186,22 @@ if __name__ == "__main__":
         for epoch in range(1, args.epochs + 1):
             train(epoch)
             test()
+    elif args.algo == "DynamicSGD":
+        # dr_sens = np.linspace(0.1,0.7,4)
+        # dr_mus = np.linspace(0.2,0.8,4)
+        DynamicSGD(
+            model,
+            train_dl,
+            test_dl,
+            args.batch_size,
+            args.epsilon,
+            args.epochs,
+            args.C,
+            args.lr,
+            "sgd",
+            0.3,
+            0.8
+            )
     else:
         print("Algorithm doesn't exist")
 
