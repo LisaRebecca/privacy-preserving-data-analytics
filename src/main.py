@@ -9,15 +9,40 @@ from datetime import datetime
 from models import MODELS
 from data_handlers import CIFAR10
 from opacus import PrivacyEngine
+from DiceSGD.trainers import DiceSGD
+import logging
+import timm
+from opacus.validators import ModuleValidator
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Train a differentially private neural network"
     )
-    parser.add_argument("--model", default="WideResNet")
+    parser.add_argument("--model", default="ResNet")
+
+    # add algorithm option
+    parser.add_argument(
+        "--algo",
+        default="DPSGD",
+        type=str,
+        help="algorithm (ClipSGD, EFSGD, DPSGD, DiceSGD)",
+    )
+
+    # Clipping thresholds for DiceSGD
+    parser.add_argument(
+        "--C", default=0.5, nargs="+", type=float, help="clipping threshold"
+    )
+    parser.add_argument(
+        "--C2",
+        default=1.0,
+        nargs="+",
+        type=float,
+        help="clipping threshold ration C2/C1",
+    )
+
     parser.add_argument("--save_results", default=True)
-    parser.add_argument("--optimizer", default="Adam")
+    parser.add_argument("--optimizer", default="SGD")
     parser.add_argument(
         "--subset_size",
         default=None,
@@ -112,35 +137,49 @@ def train(epoch):
     train_losses.append(avg_train_loss)
 
 
-def test():
-    model.eval()
-    test_loss = 0
-    correct = 0
-
-    dl = CIFAR10().val_dl
-
-    with torch.no_grad():
-        for data, target in dl:
-            data, target = data.to(device), target.to(device)
-            output = model(data)
-            test_loss += loss_fn(output, target).item()
-
-            pred = output.argmax(dim=1, keepdims=True)
-            correct += pred.eq(target.view_as(pred)).sum().item()
-
-    avg_test_loss = test_loss / len(dl)
-    test_losses.append(avg_test_loss)
-
-    print(
-        f"Test set: Average loss: {avg_test_loss}, Accuracy {correct}/{len(dl.dataset)} ({100. * correct / len(dl.dataset):.4f})\n"
-    )
-
-
 if __name__ == "__main__":
 
-    for epoch in range(1, args.epochs + 1):
-        train(epoch)
-        test()
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+
+    log_file = logging.getLogger(__name__)
+
+    # for name, param in model.named_parameters():
+    # print(name, param.requires_grad)
+
+    if args.algo == "DiceSGD":
+        val_size = int(0.15 * args.subset_size)
+        # Initialize the CIFAR10 class
+        cifar10_data = CIFAR10(
+            val_size=val_size, batch_size=args.batch_size, subset_size=args.subset_size
+        )
+
+        # Access the DataLoaders
+        train_dl = cifar10_data.train_dl
+        test_dl = cifar10_data.val_dl
+        DiceSGD(
+            model,
+            train_dl,
+            test_dl,
+            args.batch_size,
+            args.subset_size,
+            16,
+            args.epochs,
+            args.C,
+            args.C2,
+            device,
+            args.lr / args.C,
+            "sgd",
+            log_file,
+        )
+
+    elif args.algo == "DPSGD":
+        for epoch in range(1, args.epochs + 1):
+            train(epoch)
+            test()
+    else:
+        print("Algorithm doesn't exist")
 
     # Create directory for experiment
     if args.save_experiment:

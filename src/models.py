@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from wideresnet import WideResNet
 
 
 class CNNModel(nn.Module):
@@ -43,9 +44,11 @@ def load_ResNet():
 
 
 MODELS = {
-    "WideResNet": torch.hub.load(
-        "pytorch/vision:v0.10.0", "wide_resnet50_2", pretrained=False
-    ),
+    # wenn du hier fehler bekommst, dann genau so wie für das ResNet eine methode bauen und von Opacus die Batchnorm rausnehmen lassen :)
+    # "WideResNet": torch.hub.load(
+    # "pytorch/vision:v0.10.0", "wide_resnet50_2", pretrained=False
+    # ),
+    "WideResNet": WideResNet(depth=28, num_classes=10),
     "CNN": CNNModel(),
     "ResNet": load_ResNet(),
 }
