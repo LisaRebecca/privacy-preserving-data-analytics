@@ -24,6 +24,7 @@ class DynamicSGD():
             test_dl,
             batch_size,
             epsilon,
+            delta,
             epochs,
             C,
             device,
@@ -57,7 +58,8 @@ class DynamicSGD():
         self.sampling_rate = batch_size/num_data
         self.iteration = int(epochs/self.sampling_rate)
         
-        delta = 1.0/num_data
+        if delta is None:
+            delta = 1.0/num_data
         mu = 1/calibrateAnalyticGaussianMechanism(epsilon = epsilon, delta  = delta, GS = 1, tol = 1.e-12)
         mu_t = math.sqrt(math.log(mu**2/(self.sampling_rate**2*self.iteration)+1))
         sigma = 1/mu_t

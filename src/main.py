@@ -15,6 +15,12 @@ import logging
 import timm
 from opacus.validators import ModuleValidator
 
+"""
+TODO: implement Parameter averaging using EMA
+with https://github.com/lucidrains/ema-pytorch/tree/main/ema_pytorch
+beta = 0.9999 as said in paper Unlocking High Accuracy
+"""
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -164,6 +170,8 @@ if __name__ == "__main__":
     train_dl = cifar10_data.train_dl
     test_dl = cifar10_data.val_dl
 
+    delta = 1 / (2 * len(train_dl.dataset))
+
     if args.algo == "DiceSGD":
         
         DiceSGD(
@@ -171,6 +179,8 @@ if __name__ == "__main__":
             train_dl,
             test_dl,
             args.batch_size,
+            args.epsilon,
+            delta,
             args.subset_size,
             16,
             args.epochs,
@@ -195,6 +205,7 @@ if __name__ == "__main__":
             test_dl,
             args.batch_size,
             args.epsilon,
+            delta,
             args.epochs,
             args.C,
             args.lr,
