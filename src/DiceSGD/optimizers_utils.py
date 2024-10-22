@@ -1,14 +1,14 @@
 from typing import Optional, Sequence, Union
-from fastDP.accounting import accounting_manager
+from .fastDP.accounting import accounting_manager
 import types
 import torch
 import math
 from typing import Dict, Optional, Sequence, Union
 from torch import nn
 from torch.optim import Optimizer
-from fastDP import PrivacyEngine
+from .fastDP.privacy_engine import PrivacyEngine
 from opacus.accountants.utils import get_noise_multiplier
-from fastDP import autograd_grad_sample
+from .fastDP import autograd_grad_sample
 
 
 class PrivacyEngine_Dice(PrivacyEngine):

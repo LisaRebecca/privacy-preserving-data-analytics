@@ -1,7 +1,7 @@
 import torch
 import math
 from torch.optim import Optimizer
-from fastDP.privacy_engine import PrivacyEngine
+from .fastDP.privacy_engine import PrivacyEngine
 from opacus.accountants.utils import get_noise_multiplier
 from DiceSGD.optimizers_utils import PrivacyEngine_Dice
 
