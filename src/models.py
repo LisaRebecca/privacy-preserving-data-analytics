@@ -43,12 +43,14 @@ def load_ResNet():
     return model
 
 
-MODELS = {
-    # wenn du hier fehler bekommst, dann genau so wie für das ResNet eine methode bauen und von Opacus die Batchnorm rausnehmen lassen :)
-    # "WideResNet": torch.hub.load(
-    # "pytorch/vision:v0.10.0", "wide_resnet50_2", pretrained=False
-    # ),
-    "WideResNet": WideResNet(depth=28, num_classes=10),
-    "CNN": CNNModel(),
-    "ResNet": load_ResNet(),
-}
+def get_model_by_name(name: str):
+    if name == "WideResNet":
+        return WideResNet(depth=28, num_classes=100)
+    elif name == "CNN":
+        return CNNModel()
+    elif name == "ResNet":
+        return load_ResNet()
+    else:
+        return AttributeError(
+            "Model name not recognized. Available models: WideResNet, CNN, ResNet"
+        )
