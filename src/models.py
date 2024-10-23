@@ -43,9 +43,9 @@ def load_ResNet():
     return model
 
 
-def get_model_by_name(name: str):
+def get_model_by_name(name: str, classes=None):
     if name == "WideResNet":
-        return WideResNet(depth=28, num_classes=100)
+        return WideResNet(depth=28, num_classes=classes)
     elif name == "CNN":
         return CNNModel()
     elif name == "ResNet":

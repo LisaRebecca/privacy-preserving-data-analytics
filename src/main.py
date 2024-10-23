@@ -7,7 +7,7 @@ import csv
 import matplotlib.pyplot as plt
 from datetime import datetime
 from models import get_model_by_name
-from data_handlers import CIFAR100, CIFAR100
+from data_handlers import CIFAR10, CIFAR100
 from opacus import PrivacyEngine
 from DiceSGD.trainers import DiceSGD
 from DynamicSGD.trainers import DynamicSGD
@@ -27,6 +27,10 @@ def parse_args():
         description="Train a differentially private neural network"
     )
     parser.add_argument("--model", default="WideResNet")
+
+    parser.add_argument(
+        "--dataset", default="CIFAR10", help="available datasets: CIFAR10, CIFAR100"
+    )
 
     parser.add_argument(
         "--algo",
@@ -59,8 +63,8 @@ def parse_args():
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=64,
-        help="input batch size for training (default: 64)",
+        default=4096 * 2,
+        help="input batch size for training (default: 16k)",
     )
 
     parser.add_argument(
@@ -98,7 +102,25 @@ args = parse_args()
 
 device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
 
-model = get_model_by_name(args.model).to(device)
+# Load dataset
+val_size = int(0.15 * args.subset_size)
+classes = None
+if args.dataset == "CIFAR100":
+    CIFAR100_data = CIFAR100(
+        val_size=val_size, batch_size=args.batch_size, subset_size=args.subset_size
+    )
+    train_dl = CIFAR100_data.train_dl
+    test_dl = CIFAR100_data.val_dl
+    classes = 100
+elif args.dataset == "CIFAR10":
+    CIFAR10_data = CIFAR10(
+        val_size=val_size, batch_size=args.batch_size, subset_size=args.subset_size
+    )
+    train_dl = CIFAR10_data.train_dl
+    test_dl = CIFAR10_data.val_dl
+    classes = 10
+
+model = get_model_by_name(args.model, classes=classes).to(device)
 
 OPTIMIZERS = {
     "SGD": optim.SGD(model.parameters(), lr=args.lr),
@@ -148,7 +170,7 @@ def train(epoch, model, optimizer, dl, loss_fn, device, log_interval=5):
 
         if (batch_idx % log_interval) == 0:
             print(
-                f"Training step: epoch {epoch} - batch {batch_idx} [{batch_idx * len(data)}/{len(dl.dataset)}] ({100. * batch_idx / len(dl):.0f}%) \t {loss.item()}"
+                f"Train ep {epoch} - batch {batch_idx} [{batch_idx * len(data)}/{len(dl.dataset)}] ({100. * batch_idx / len(dl):.0f}%) \t loss: {loss.item()} \t accuracy: {100.0 * correct / total}"
             )
 
     avg_train_loss = running_loss / len(dl)
@@ -178,6 +200,9 @@ def evaluate(model, dl, loss_fn, device):
     avg_test_loss = running_loss / len(dl)
 
     test_accuracy = 100.0 * correct / total
+
+    print(f"Test loss: {avg_test_loss} test accuracy: {test_accuracy}")
+
     return avg_test_loss, test_accuracy
 
 
@@ -186,15 +211,6 @@ if __name__ == "__main__":
         level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
     )
     log_file = logging.getLogger(__name__)
-
-    val_size = int(0.15 * args.subset_size)
-
-    # Load dataset
-    CIFAR100_data = CIFAR100(
-        val_size=val_size, batch_size=args.batch_size, subset_size=args.subset_size
-    )
-    train_dl = CIFAR100_data.train_dl
-    test_dl = CIFAR100_data.val_dl
 
     # Calculate delta
     delta = 1 / (2 * len(train_dl.dataset))
