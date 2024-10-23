@@ -14,13 +14,13 @@ from DynamicSGD.trainers import DynamicSGD
 import logging
 import timm
 from opacus.validators import ModuleValidator
+from ema_pytorch import EMA
 
 """
 TODO: implement Parameter averaging using EMA
 with https://github.com/lucidrains/ema-pytorch/tree/main/ema_pytorch
 beta = 0.9999 as said in paper Unlocking High Accuracy
 """
-
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -99,6 +99,12 @@ args = parse_args()
 device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
 
 model = get_model_by_name(args.model).to(device)
+ema = EMA(
+    model,
+    beta = 0.9999,              # exponential moving average factor
+    update_after_step = 100,    # only after this number of .update() calls will it start updating
+    update_every = 10,          # how often to actually update, to save on compute (updates every 10th .update() call)
+)
 
 OPTIMIZERS = {
     "SGD": optim.SGD(model.parameters(), lr=args.lr),
@@ -150,6 +156,7 @@ def train(epoch, model, optimizer, dl, loss_fn, device, log_interval=5):
             print(
                 f"Training step: epoch {epoch} - batch {batch_idx} [{batch_idx * len(data)}/{len(dl.dataset)}] ({100. * batch_idx / len(dl):.0f}%) \t {loss.item()}"
             )
+        ema.update()
 
     avg_train_loss = running_loss / len(dl)
     train_losses.append(avg_train_loss)
@@ -168,13 +175,14 @@ def evaluate(model, dl, loss_fn, device):
         for data, target in dl:
             data, target = data.to(device), target.to(device)
             output = model(data)
+            # output = ema.ema_model(data)
             loss = loss_fn(output, target)
             running_loss += loss.item()
 
             _, predicted = torch.max(output, 1)
             correct += (predicted == target).sum().item()
             total += target.size(0)
-
+    
     avg_test_loss = running_loss / len(dl)
 
     test_accuracy = 100.0 * correct / total
@@ -250,6 +258,7 @@ if __name__ == "__main__":
     elif args.algo == "DPSGD":
         for epoch in range(1, args.epochs + 1):
             train(epoch, model, optimizer, train_dl, loss_fn, device)
+            ema.update_model_with_ema()
             avg_test_loss, test_accuracy = evaluate(model, test_dl, loss_fn, device)
             test_losses.append(avg_test_loss)
             test_accuracies.append(test_accuracy)
