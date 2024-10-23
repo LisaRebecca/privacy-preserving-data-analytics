@@ -38,7 +38,7 @@ class CIFAR10:
         self.dataset_url = "https://s3.amazonaws.com/fast-ai-imageclas/cifar10.tgz"
         self.data_dir = "./data/cifar10"
 
-        # self.download_data()
+        self.download_data()
 
         self.dataset = ImageFolder(self.data_dir + "/train", transform=ToTensor())
 
@@ -47,8 +47,9 @@ class CIFAR10:
                 raise ValueError(
                     f"Validation size ({val_size}) cannot be larger than subset size ({subset_size})."
                 )
-            indices = range(0, subset_size)
-            self.dataset = Subset(self.dataset, indices)
+            total_indices = torch.randperm(len(self.dataset)).tolist()
+            subset_indices = total_indices[:subset_size]
+            self.dataset = Subset(self.dataset, subset_indices)
 
         from torch.utils.data import random_split
 
@@ -106,8 +107,9 @@ class CIFAR100:
                 raise ValueError(
                     f"Validation size ({val_size}) cannot be larger than subset size ({subset_size})."
                 )
-            indices = range(0, subset_size)
-            self.dataset = Subset(self.dataset, indices)
+            total_indices = torch.randperm(len(self.dataset)).tolist()
+            subset_indices = total_indices[:subset_size]
+            self.dataset = Subset(self.dataset, subset_indices)
 
         from torch.utils.data import random_split
 

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from wideresnet import WideResNet
+import torchvision
 
 
 class CNNModel(nn.Module):
@@ -33,7 +34,7 @@ class CNNModel(nn.Module):
 
 
 def load_ResNet():
-    model = torch.hub.load("pytorch/vision:v0.10.0", "resnet18", pretrained=True)
+    model = torchvision.models.resnet18()
     from opacus.validators import ModuleValidator
 
     errors = ModuleValidator.validate(model, strict=False)
