@@ -92,7 +92,7 @@ class CIFAR10:
 
 class CIFAR100:
 
-    def __init__(self, val_size=50, batch_size=100, subset_size=None):
+    def __init__(self, val_size=50, batch_size=4096, subset_size=None):
         self.dataset_url = "https://s3.amazonaws.com/fast-ai-imageclas/cifar100.tgz"
         self.data_dir = "./data/cifar100"
 
@@ -150,8 +150,7 @@ class CIFAR100:
 
 
 if __name__ == "__main__":
-    # cf = CIFAR10()
-    # cf.show_example_by_idx(0)
-    # cf.show_batch()
+    cf = CIFAR100()
+    print(len(cf.dataset))
 
     print("done")
