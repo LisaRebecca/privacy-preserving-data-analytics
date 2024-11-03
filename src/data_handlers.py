@@ -3,9 +3,6 @@ from torchvision import datasets
 from torchvision.transforms import ToTensor
 from torch.utils.data import DataLoader, Subset, SubsetRandomSampler
 
-random_seed = 42
-torch.manual_seed(random_seed)
-
 
 class MNIST_Digits:
 

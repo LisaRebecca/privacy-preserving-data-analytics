@@ -9,11 +9,10 @@ from datetime import datetime
 from models import get_model_by_name
 from data_handlers import CIFAR10, CIFAR100
 from opacus import PrivacyEngine
-from DiceSGD.trainers import DiceSGD
-from DynamicSGD.trainers import DynamicSGD
+
+
 import logging
-import timm
-from opacus.validators import ModuleValidator
+
 
 """
 TODO: implement Parameter averaging using EMA
@@ -52,7 +51,7 @@ def parse_args():
     )
 
     parser.add_argument("--save_results", default=True)
-    parser.add_argument("--optimizer", default="SGD")
+    parser.add_argument("--optimizer", default="sgd")
     parser.add_argument(
         "--subset_size",
         default=50000,
@@ -83,9 +82,7 @@ def parse_args():
     parser.add_argument(
         "--lr", type=float, default=0.001, help="learning rate (default: 0.001)"
     )
-    parser.add_argument(
-        "--cpu", action="store_true", default=False, help="force CPU training"
-    )
+    parser.add_argument("--cpu", default=False, help="force CPU training")
     parser.add_argument(
         "--save_experiment",
         default=True,
@@ -100,7 +97,15 @@ def parse_args():
 
 args = parse_args()
 
-device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
+device_str = "cpu"
+if args.cpu == False:
+    if torch.backends.mps.is_available():
+        device_str = "mps"
+    if torch.cuda.is_available():
+        device_str = "cuda"
+
+print("Using device", str(device_str))
+device = torch.device(device_str)
 
 # Load dataset
 val_size = int(0.15 * args.subset_size)
@@ -123,9 +128,9 @@ elif args.dataset == "CIFAR10":
 model = get_model_by_name(args.model, classes=classes).to(device)
 
 OPTIMIZERS = {
-    "SGD": optim.SGD(model.parameters(), lr=args.lr),
-    "SGDM": optim.SGD(model.parameters(), lr=args.lr, momentum=0.1),
-    "Adam": optim.Adam(model.parameters(), lr=args.lr),
+    "sgd": optim.SGD(model.parameters(), lr=args.lr),
+    "sgdm": optim.SGD(model.parameters(), lr=args.lr, momentum=0.1),
+    "adam": optim.Adam(model.parameters(), lr=args.lr),
 }
 
 optimizer = OPTIMIZERS[args.optimizer]
@@ -213,7 +218,7 @@ if __name__ == "__main__":
     log_file = logging.getLogger(__name__)
 
     # Calculate delta
-    delta = 1 / (2 * len(train_dl.dataset))
+    # delta = 1 / (2 * len(train_dl.dataset))
 
     # Create directory for experiment
     if args.save_experiment:
@@ -225,10 +230,10 @@ if __name__ == "__main__":
         args_file = os.path.join(experiment_dir, "config.txt")
         with open(args_file, "w") as f:
             for arg, value in vars(args).items():
-                f.write(f"{arg}: {value}\n")
+                f.write(f"{arg}={value}\n")
 
     # Initialize PrivacyEngine (if needed)
-    if args.algo in ["DPSGD", "DiceSGD", "DynamicSGD"]:
+    if args.algo in ["DPSGD", "DiceSGD"]:
         privacy_engine = PrivacyEngine()
 
         model, optimizer, train_dl = privacy_engine.make_private_with_epsilon(
@@ -244,7 +249,10 @@ if __name__ == "__main__":
         )
 
     # Training algorithms
+
     if args.algo == "DiceSGD":
+        from DiceSGD.trainers import DiceSGD
+
         DiceSGD(
             model,
             train_dl,
@@ -276,21 +284,38 @@ if __name__ == "__main__":
                 torch.save(model.state_dict(), model_path)
 
     elif args.algo == "DynamicSGD":
-        DynamicSGD(
+        from DynamicSGD.trainers import DynamicSGD
+        from ema_pytorch import EMA
+
+        ema = EMA(
+            model,
+            beta=0.9999,  # exponential moving average factor
+            update_after_step=100,  # only after this number of .update() calls will it start updating
+            update_every=10,  # how often to actually update, to save on compute (updates every 10th .update() call)
+        )
+
+        dysgd = DynamicSGD(
             model=model,
             train_dl=train_dl,
             test_dl=test_dl,
             device=device,
             batch_size=args.batch_size,
             epsilon=args.epsilon,
-            delta=delta,
+            delta=args.delta,
             epochs=args.epochs,
             C=args.C,
             lr=args.lr,
-            method="sgd",
+            method=args.optimizer,
             decay_rate_sens=0.3,
             decay_rate_mu=0.8,
+            ema=ema,
         )
+
+        test_losses = dysgd.test_losses
+        train_losses = dysgd.train_losses
+        test_accuracies = dysgd.test_accuracies
+        train_accuracies = dysgd.train_accuracies
+
     else:
         print("Algorithm doesn't exist")
 

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from wideresnet import WideResNet
+from wideresnet_dynamic import WideResNet
 import torchvision
 
 

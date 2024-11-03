@@ -127,6 +127,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+env*/
 
 # Spyder project settings
 .spyderproject
@@ -170,3 +171,4 @@ src/data/
 **cifar10.tgz
 src/data/*
 src/experiments/*
+**.tgz
