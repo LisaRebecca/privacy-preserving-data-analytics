@@ -39,13 +39,10 @@ def parse_args():
     )
 
     # Clipping thresholds for DiceSGD
-    parser.add_argument(
-        "--C", default=0.5, nargs="+", type=float, help="clipping threshold"
-    )
+    parser.add_argument("--C", default=0.5, type=float, help="clipping threshold")
     parser.add_argument(
         "--C2",
         default=1.0,
-        nargs="+",
         type=float,
         help="clipping threshold ration C2/C1",
     )
@@ -131,6 +128,9 @@ OPTIMIZERS = {
     "sgd": optim.SGD(model.parameters(), lr=args.lr),
     "sgdm": optim.SGD(model.parameters(), lr=args.lr, momentum=0.1),
     "adam": optim.Adam(model.parameters(), lr=args.lr),
+    "rmsprop": optim.RMSprop(model.parameters(), lr=args.lr),
+    "adagrad": optim.Adagrad(model.parameters(), lr=args.lr),
+    "adamw": optim.AdamW(model.parameters(), lr=args.lr),
 }
 
 optimizer = OPTIMIZERS[args.optimizer]
@@ -155,27 +155,45 @@ def train(epoch, model, optimizer, dl, loss_fn, device, log_interval=5):
     running_loss = 0
     correct = 0
     total = 0
+    accumulation_steps = args.batch_size // 512
+    num_iterations = 2500
+    iteration_count = 0
 
     for batch_idx, (data, target) in enumerate(dl):
         data, target = data.to(device), target.to(device)
 
-        optimizer.zero_grad()
-
+        # Forward pass
         output = model(data)
         loss = loss_fn(output, target)
+        loss = (
+            loss / accumulation_steps
+        )  # Normalize loss to account for gradient accumulation
 
+        # Backward pass
         loss.backward()
-        optimizer.step()
 
-        running_loss += loss.item()
+        # Only update after `accumulation_steps` batches
+        if (batch_idx + 1) % accumulation_steps == 0:
+            optimizer.step()
+            optimizer.zero_grad()
 
+            iteration_count += 1  # Track the number of iterations (updates)
+            if (
+                iteration_count >= num_iterations
+            ):  # Stop if we've reached the target iterations
+                break
+
+        # Logging
+        running_loss += loss.item() * accumulation_steps  # Scale back loss for logging
         _, predicted = torch.max(output, 1)
         correct += (predicted == target).sum().item()
         total += target.size(0)
 
         if (batch_idx % log_interval) == 0:
             print(
-                f"Train ep {epoch} - batch {batch_idx} [{batch_idx * len(data)}/{len(dl.dataset)}] ({100. * batch_idx / len(dl):.0f}%) \t loss: {loss.item()} \t accuracy: {100.0 * correct / total}"
+                f"Train ep {epoch} - batch {batch_idx} [{batch_idx * len(data)}/{len(dl.dataset)}] "
+                f"({100. * batch_idx / len(dl):.0f}%) \t loss: {loss.item() * accumulation_steps} \t "
+                f"accuracy: {100.0 * correct / total}"
             )
 
     avg_train_loss = running_loss / len(dl)
