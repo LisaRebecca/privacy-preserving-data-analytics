@@ -27,24 +27,49 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 # from opacus.layers import DPModule
 
 
 class Conv2d(nn.Conv2d):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1,
-                 padding=0, dilation=1, groups=1, bias=True):
-        super(Conv2d, self).__init__(in_channels, out_channels, kernel_size, stride,
-                                     padding, dilation, groups, bias)
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
+        bias=True,
+    ):
+        super(Conv2d, self).__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+        )
 
     def forward(self, x):
         # Normalize weights for dynamic mean and standard deviation
         weight = self.weight
-        weight_mean = weight.mean(dim=1, keepdim=True).mean(dim=2, keepdim=True).mean(dim=3, keepdim=True)
+        weight_mean = (
+            weight.mean(dim=1, keepdim=True)
+            .mean(dim=2, keepdim=True)
+            .mean(dim=3, keepdim=True)
+        )
         weight = weight - weight_mean
         std = weight.view(weight.size(0), -1).std(dim=1).view(-1, 1, 1, 1) + 1e-5
         weight = weight / std.expand_as(weight)
 
-        return F.conv2d(x, weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
+        return F.conv2d(
+            x, weight, self.bias, self.stride, self.padding, self.dilation, self.groups
+        )
+
 
 class BasicBlock(nn.Module):
     def __init__(self, in_planes, out_planes, stride, nb_groups, order):
@@ -143,6 +168,7 @@ class WideResNet(nn.Module):
         order1=0,
         order2=0,
     ):
+        """
         if order1 == 0:
             print("order1=0: In the blocks: like in DM, BN on top of relu")
         if order1 == 1:
@@ -159,6 +185,7 @@ class WideResNet(nn.Module):
             print("order2=0: outside the blocks:  like in DM, BN on top of relu")
         if order2 == 1:
             print("order2=1: outside the blocks:  not like in DM, relu on top of BN")
+        """
         super(WideResNet, self).__init__()
         nChannels = [16, 16 * widen_factor, 32 * widen_factor, 64 * widen_factor]
         assert (depth - 4) % 6 == 0
