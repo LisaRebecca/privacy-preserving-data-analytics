@@ -150,51 +150,54 @@ train_accuracies = []
 test_accuracies = []
 
 
-def train(epoch, model, optimizer, dl, loss_fn, device, log_interval=5):
+from opacus.utils.batch_memory_manager import BatchMemoryManager
+
+
+def train(epoch, model, optimizer, dl, loss_fn, device, log_interval=1):
     model.train()
     running_loss = 0
     correct = 0
     total = 0
-    accumulation_steps = args.batch_size // 512
     num_iterations = 2500
     iteration_count = 0
 
-    for batch_idx, (data, target) in enumerate(dl):
-        data, target = data.to(device), target.to(device)
+    with BatchMemoryManager(
+        data_loader=dl,
+        max_physical_batch_size=4096,  # Physical batch size
+        optimizer=optimizer,
+    ) as memory_safe_data_loader:
 
-        # Forward pass
-        output = model(data)
-        loss = loss_fn(output, target)
-        loss = (
-            loss / accumulation_steps
-        )  # Normalize loss to account for gradient accumulation
-
-        # Backward pass
-        loss.backward()
-
-        # Only update after `accumulation_steps` batches
-        if (batch_idx + 1) % accumulation_steps == 0:
-            optimizer.step()
-            optimizer.zero_grad()
-
-            iteration_count += 1  # Track the number of iterations (updates)
+        for batch_idx, (data, target) in enumerate(memory_safe_data_loader):
             if (
                 iteration_count >= num_iterations
-            ):  # Stop if we've reached the target iterations
+            ):  # Stop if we’ve reached the target iterations
                 break
 
-        # Logging
-        running_loss += loss.item() * accumulation_steps  # Scale back loss for logging
-        _, predicted = torch.max(output, 1)
-        correct += (predicted == target).sum().item()
-        total += target.size(0)
+            data, target = data.to(device), target.to(device)
 
-        if (batch_idx % log_interval) == 0:
-            print(
-                f"Train ep {epoch} - batch {batch_idx} [{batch_idx * len(data)}/{len(dl.dataset)}] "
-                f"({100. * batch_idx / len(dl):.0f}%) \t loss: {loss.item() * accumulation_steps} \t "
-                f"accuracy: {100.0 * correct / total}"
-            )
+            # Forward pass
+            output = model(data)
+            loss = loss_fn(output, target)
+
+            # Backward pass
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            # Track loss and accuracy
+            running_loss += loss.item()
+            _, predicted = torch.max(output, 1)
+            correct += (predicted == target).sum().item()
+            total += target.size(0)
+
+            if (batch_idx % log_interval) == 0:
+                print(
+                    f"Train ep {epoch} - batch {batch_idx} [{batch_idx * len(data)}/{len(dl.dataset)}] "
+                    f"({100. * batch_idx / len(dl):.0f}%) \t loss: {loss.item()} \t "
+                    f"accuracy: {100.0 * correct / total}"
+                )
+
+            iteration_count += 1  # Track the number of iterations (updates)
 
     avg_train_loss = running_loss / len(dl)
     train_losses.append(avg_train_loss)
