@@ -123,7 +123,7 @@ class DynamicSGD:
         else:
             raise RuntimeError("Unknown Optimizer!")
 
-    def train(epoch, self, step, ema=None):
+    def train(self,epoch, step, ema=None):
         self.model.train()
         criterion = nn.CrossEntropyLoss()
         losses = []
@@ -149,7 +149,7 @@ class DynamicSGD:
                 unit_sigma = 1 / (self.mu_0 / (self.decay_rate_mu ** (step)))
                 self.privacy_engine.set_unit_sigma(unit_sigma)
 
-            for i in tqdm(range(int(1 / self.sampling_rate))):
+            for i in range(int(1 / self.sampling_rate)):
                 data, target = poisson_sampler(
                     self.train_dl.dataset, self.sampling_rate
                 )

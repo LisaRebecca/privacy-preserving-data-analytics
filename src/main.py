@@ -149,11 +149,8 @@ test_losses = []
 train_accuracies = []
 test_accuracies = []
 
-
-from opacus.utils.batch_memory_manager import BatchMemoryManager
-
-
 def train(epoch, model, optimizer, dl, loss_fn, device, log_interval=1):
+    from opacus.utils.batch_memory_manager import BatchMemoryManager
     model.train()
     running_loss = 0
     correct = 0
