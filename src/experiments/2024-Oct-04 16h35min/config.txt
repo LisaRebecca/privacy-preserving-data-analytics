@@ -1,0 +1,10 @@
+run_name: DDPM
+save_results: True
+model_snapshot_epochs: 20
+subset_size: 100
+dry_run: False
+batch_size: 64
+epochs: 2
+lr: 0.001
+cpu: False
+save_experiment: True

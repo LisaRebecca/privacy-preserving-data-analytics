@@ -1,0 +1,15 @@
+model: WideResNet
+algo: DPSGD
+C: 0.5
+C2: 1.0
+save_results: True
+optimizer: SGD
+subset_size: 50000
+dry_run: False
+batch_size: 64
+epsilon: 3
+delta: 1e-05
+epochs: 3
+lr: 0.001
+cpu: False
+save_experiment: True

@@ -1,0 +1,12 @@
+algo: DPSGD
+optimizer: sgd
+C: 1
+save_results: True
+subset_size: None
+dry_run: False
+batch_size: 256
+epsilon: 3
+epochs: 1
+lr: 0.1
+cpu: False
+save_experiment: True

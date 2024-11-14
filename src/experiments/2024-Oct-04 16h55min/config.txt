@@ -1,0 +1,11 @@
+model: WideResNet
+save_results: True
+optimizer: Adam
+model_snapshot_epochs: 20
+subset_size: 100
+dry_run: False
+batch_size: 64
+epochs: 10
+lr: 0.001
+cpu: False
+save_experiment: True

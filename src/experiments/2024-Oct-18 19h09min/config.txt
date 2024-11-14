@@ -1,0 +1,10 @@
+model: ResNet
+save_results: True
+optimizer: SGD
+subset_size: 100
+dry_run: False
+batch_size: 64
+epochs: 2
+lr: 0.001
+cpu: False
+save_experiment: True
