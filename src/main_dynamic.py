@@ -8,8 +8,10 @@ import matplotlib
 import matplotlib.pyplot as plt
 from datetime import datetime
 from data_handlers import CIFAR10
-from DynamicSGD.trainers import DynamicSGD
-from wideresnet_dynamic import WideResNet
+from DynamicSGD.trainers_new import DynamicSGD
+
+# from utils.trainers import DynamicSGD
+from wideresnet_16_4 import WideResNet
 from ema_pytorch import EMA
 
 """
@@ -25,6 +27,8 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Train a differentially private neural network"
     )
+
+    parser.add_argument("--model", default="WideResNet")
 
     # add algorithm option
     parser.add_argument(
@@ -69,11 +73,40 @@ def parse_args():
         "--epochs", type=int, default=5, help="number of epochs to train (default: 2)"
     )
     parser.add_argument(
-        "--lr", type=float, default=0.1, help="learning rate (default: 0.01)"
+        "--lr", type=float, default=0.1, help="learning rate (default: 0.1)"
     )
     parser.add_argument(
         "--cpu", action="store_true", default=False, help="force CPU training"
     )
+
+    parser.add_argument(
+        "--dp",
+        type=bool,
+        default=True,
+        help="Train with DP (True) or without DP (False)",
+    )
+
+    parser.add_argument(
+        "--new",
+        type=bool,
+        default=True,
+        help="Train with opacus==0.14.0 (False) or opacus==1.5.2 (True)",
+    )
+
+    parser.add_argument(
+        "--sens_decay",
+        type=float,
+        default=0.3,
+        help="Set the sensitivity decay rate between 0 and 1",
+    )
+
+    parser.add_argument(
+        "--mu_decay",
+        type=float,
+        default=0.75,
+        help="Set the decay rate between 0 and 1",
+    )
+
     parser.add_argument(
         "--save_experiment",
         action="store_true",
@@ -85,16 +118,14 @@ def parse_args():
 
 args = parse_args()
 
-device_str = "cpu"
-if torch.backends.mps.is_available():
-    device_str = "mps"
-if torch.cuda.is_available():
-    device_str = "cuda"
+device = torch.device("cuda" if torch.cuda.is_available() and not args.cpu else "cpu")
 
-print("Using device", str(device_str))
-device = torch.device(device_str)
 
-model = WideResNet(depth=28, num_classes=10).to(device)
+model = (
+    WideResNet(depth=16, num_classes=10, widen_factor=4).to(device)
+    if args.model == "WideResNet"
+    else ResNet20(num_classes=10, num_groups=16).to(device)
+)
 ema = EMA(
     model,
     beta=0.9999,  # exponential moving average factor
@@ -108,7 +139,9 @@ if __name__ == "__main__":
     # print(name, param.requires_grad)
 
     # Initialize the CIFAR10 class
-    cifar10_data = CIFAR10(subset_size=args.subset_size)
+    cifar10_data = CIFAR10(
+        val_size=10000, batch_size=args.batch_size, subset_size=args.subset_size
+    )
 
     # Access the DataLoaders
     train_dl = cifar10_data.train_dl
@@ -130,9 +163,10 @@ if __name__ == "__main__":
         device,
         args.lr,
         args.optimizer,
-        0.3,
-        0.8,
+        args.sens_decay,
+        args.mu_decay,
         ema,
+        args.dp,
     )
 
     test_losses = dysgd.test_losses

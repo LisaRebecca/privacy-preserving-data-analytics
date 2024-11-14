@@ -12,35 +12,33 @@ from tqdm import tqdm
 from .GaussianCalibrator import calibrateAnalyticGaussianMechanism
 import math
 from .poisson_sampler import poisson_sampler
-from .mu_search import mu0_search, cal_step_decay_rate
+from .mu_search import mu0_search,cal_step_decay_rate
 from scipy.stats import norm
 from scipy import optimize
 from ema_pytorch import EMA
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-
-class DynamicSGD:
+class DynamicSGD(): 
     def __init__(
-        self,
-        model,
-        train_dl,
-        test_dl,
-        batch_size,
-        epsilon,
-        delta,
-        epochs,
-        C,
-        device,
-        lr,
-        method,
-        decay_rate_sens=None,
-        decay_rate_mu=None,
-        ema=None,
-        dp=True,
-    ):
+            self, 
+            model,
+            train_dl,
+            test_dl,
+            batch_size,
+            epsilon,
+            delta,
+            epochs,
+            C,
+            device,
+            lr,
+            method,
+            decay_rate_sens = None, 
+            decay_rate_mu = None,
+            ema=None,
+            dp = True):
         self.model = model  # Model to be trained
         self.optimizer = self.set_optimizer(method, self.model, lr)
-
+        
         self.train_dl = train_dl  # Training data loader
         self.test_dl = test_dl  # Testing data loader
         self.batch_size = batch_size  # Size of each batch
@@ -57,54 +55,42 @@ class DynamicSGD:
 
         self.train_losses = []
         self.train_accuracies = []
-
+        
         num_data = len(train_dl.dataset)
-        print(f"Training_dataset length: {num_data}")
+        print(f'Training_dataset length: {num_data}')
 
-        self.sampling_rate = batch_size / num_data
-        self.iteration = int(epochs / self.sampling_rate)
-
-        if delta is None:
-            delta = 1.0 / num_data
-        mu = 1 / calibrateAnalyticGaussianMechanism(
-            epsilon=epsilon, delta=delta, GS=C, tol=1.0e-12
-        )
-        mu_t = math.sqrt(math.log(mu**2 / (self.sampling_rate**2 * self.iteration) + 1))
-        sigma = 1 / mu_t
-
-        if decay_rate_mu is not None:
-            self.decay_rate_mu = cal_step_decay_rate(decay_rate_mu, self.iteration)
-            self.mu_0 = mu0_search(
-                mu, self.iteration, self.decay_rate_mu, self.sampling_rate, mu_t=mu_t
-            )
-
-        if decay_rate_sens is not None:
-            self.decay_rate_sens = cal_step_decay_rate(decay_rate_sens, self.iteration)
-
+        self.sampling_rate = batch_size/num_data
+        self.iteration = int(epochs/self.sampling_rate)
+        
         if dp:
+            if delta is None:
+                delta = 1.0/num_data
+            mu = 1/calibrateAnalyticGaussianMechanism(epsilon = epsilon, delta  = delta, GS = 1, tol = 1.e-12)
+            mu_t = math.sqrt(math.log(mu**2/(self.sampling_rate**2*self.iteration)+1))
+            sigma = 1/mu_t
+
+            if decay_rate_mu is not None:
+                self.decay_rate_mu = cal_step_decay_rate(decay_rate_mu,self.iteration)
+                self.mu_0 = mu0_search(mu, self.iteration, self.decay_rate_mu, self.sampling_rate,mu_t=mu_t)
+                
+            if decay_rate_sens is not None:
+                self.decay_rate_sens = cal_step_decay_rate(decay_rate_sens,self.iteration)
+
             self.privacy_engine = PrivacyEngine(
-                self.model,
-                sample_rate=self.sampling_rate,
-                batch_size=self.batch_size,
-                max_grad_norm=C,
-                noise_multiplier=sigma,
-            )
+                    self.model,
+                    sample_rate=self.sampling_rate,
+                    batch_size=self.batch_size,
+                    max_grad_norm=C,
+                    noise_multiplier= sigma,
+                )
             self.privacy_engine.attach(self.optimizer)
 
-        """
-        scheduler = ReduceLROnPlateau(
-            self.optimizer,
-            mode="min",
-            factor=0.8,
-            patience=10,
-            verbose=True,
-            min_lr=0.00001,
-        )
-        """
+        scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.5, patience=5, verbose=True,
+                                      min_lr=0.001)
 
         for epoch in range(epochs):
-            step = self.train(epoch, step, ema)
-            # scheduler.step(self.train_losses[epoch])
+            step = self.train(step, ema)
+            scheduler.step(self.train_losses[epoch])
             if ema is not None:
                 ema.update_model_with_ema()
             self.test()
@@ -123,11 +109,11 @@ class DynamicSGD:
         else:
             raise RuntimeError("Unknown Optimizer!")
 
-    def train(self,epoch, step, ema=None):
+    def train(self, step, ema=None):
         self.model.train()
         criterion = nn.CrossEntropyLoss()
         losses = []
-        correct = 0
+        correct = 0 
         total = 0
         if self.dp == False:
             for _batch_idx, (data, target) in enumerate(tqdm(self.train_dl)):
@@ -139,20 +125,20 @@ class DynamicSGD:
                 self.optimizer.step()
                 losses.append(loss.item())
                 step += 1
-                pred = output.argmax(dim=1, keepdim=True)
+                pred = output.argmax(
+                                    dim=1, keepdim=True
+                                ) 
                 correct += pred.eq(target.view_as(pred)).sum().item()
         else:
             if self.decay_rate_sens is not None:
-                clip = self.max_per_sample_grad_norm * (self.decay_rate_sens) ** step
+                clip = self.max_per_sample_grad_norm * (self.decay_rate_sens)**step
                 self.privacy_engine.set_clip(clip)
             if self.decay_rate_mu is not None:
-                unit_sigma = 1 / (self.mu_0 / (self.decay_rate_mu ** (step)))
+                unit_sigma = self.max_per_sample_grad_norm * (1/self.mu_0) * (self.decay_rate_mu**(step))
                 self.privacy_engine.set_unit_sigma(unit_sigma)
-
-            for i in range(int(1 / self.sampling_rate)):
-                data, target = poisson_sampler(
-                    self.train_dl.dataset, self.sampling_rate
-                )
+        
+            for i in tqdm(range(int(1/self.sampling_rate))):
+                data, target = poisson_sampler(self.train_dl.dataset,self.sampling_rate)
                 data, target = data.to(self.device), target.to(self.device)
                 self.optimizer.zero_grad()
                 output = self.model(data)
@@ -161,20 +147,16 @@ class DynamicSGD:
                 self.optimizer.step()
                 losses.append(loss.item())
                 step += 1
-                pred = output.argmax(dim=1, keepdim=True)
-
+                pred = output.argmax(
+                                dim=1, keepdim=True
+                            ) 
+                
                 correct += pred.eq(target.view_as(pred)).sum().item()
                 total += target.shape[0]
 
                 if ema is not None:
                     ema.update()
-
-                print(
-                    f"Train ep {epoch} - batch {i} [{i * len(data)}/{len(self.train_dl.dataset)}] "
-                    f"({100. * i / len(self.train_dl):.0f}%) \t loss: {loss.item()} \t "
-                    f"accuracy: {100.0 * correct / total}"
-                )
-            acc = 100.0 * correct / total
+            acc = 100.0*correct/ total
             self.train_accuracies.append(acc)
         self.train_losses.append(np.mean(losses))
         return step
