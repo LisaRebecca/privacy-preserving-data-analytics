@@ -1,0 +1,1 @@
+python cifar10.py --batch_size 256 --ref_nb_steps 2500 --ref_B 4096 --ref_noise 3 --transform 16 --data_root "data"

@@ -1,0 +1,9 @@
+
+
+numpy
+opacus==1.1.2
+pandas
+timm==0.6.2.dev0
+torchvision
+typing_extensions
+tqdm
