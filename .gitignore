@@ -171,3 +171,4 @@ src/data/
 **cifar10.tgz
 src/data/*
 **.tgz
+*.pkl
