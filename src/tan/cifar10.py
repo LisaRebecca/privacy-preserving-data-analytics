@@ -245,7 +245,7 @@ def main():  ## for non poisson, divide bs by world size
         expected_batch_size=args.batch_size,
     )
 
-    scheduler = ExponentialNoise(optimizer=optimizer, gamma=0.99)
+    scheduler = ExponentialNoise(optimizer=dp_optimizer, gamma=0.99)
 
     ##We use our PrivacyEngine Augmented to take into accoung the eventual augmentation multiplicity
     model, optimizer, train_loader = privacy_engine.make_private(
