@@ -37,6 +37,7 @@ from src.models.prepare_models import prepare_data_cifar, prepare_augmult_cifar
 from torch.nn.parallel import DistributedDataParallel as DDP
 from opacus.distributed import DifferentiallyPrivateDistributedDataParallel as DPDDP
 from opacus.scheduler import ExponentialNoise
+from opacus.optimizers import DPOptimizer
 
 import warnings
 
@@ -238,10 +239,16 @@ def main():  ## for non poisson, divide bs by world size
     sigma = get_noise_from_bs(args.batch_size, args.ref_noise, args.ref_B)
     scheduler = ExponentialNoise(optimizer=optimizer, gamma=0.99)
 
+    dp_optimizer = DPOptimizer(
+        optimizer=optimizer,
+        noise_multiplier=sigma,
+        max_grad_norm=args.max_per_sample_grad_norm,
+    )
+
     ##We use our PrivacyEngine Augmented to take into accoung the eventual augmentation multiplicity
     model, optimizer, train_loader = privacy_engine.make_private(
         module=model,
-        optimizer=optimizer,
+        optimizer=dp_optimizer,
         data_loader=train_loader,
         noise_multiplier=sigma,
         max_grad_norm=args.max_per_sample_grad_norm,
