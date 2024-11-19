@@ -237,13 +237,14 @@ def main():  ## for non poisson, divide bs by world size
     # Creating the privacy engine
     privacy_engine = PrivacyEngineAugmented(GradSampleModule.GRAD_SAMPLERS)
     sigma = get_noise_from_bs(args.batch_size, args.ref_noise, args.ref_B)
-    scheduler = ExponentialNoise(optimizer=optimizer, gamma=0.99)
-
+    
     dp_optimizer = DPOptimizer(
         optimizer=optimizer,
         noise_multiplier=sigma,
         max_grad_norm=args.max_per_sample_grad_norm,
     )
+
+    scheduler = ExponentialNoise(optimizer=optimizer, gamma=0.99)
 
     ##We use our PrivacyEngine Augmented to take into accoung the eventual augmentation multiplicity
     model, optimizer, train_loader = privacy_engine.make_private(
