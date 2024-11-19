@@ -36,6 +36,7 @@ import json
 from src.models.prepare_models import prepare_data_cifar, prepare_augmult_cifar
 from torch.nn.parallel import DistributedDataParallel as DDP
 from opacus.distributed import DifferentiallyPrivateDistributedDataParallel as DPDDP
+from opacus.scheduler import ExponentialNoise
 
 import warnings
 
@@ -62,6 +63,7 @@ def train(
     args,
     norms2_before_sigma,
     nb_steps,
+    scheduler,
 ):
     """
     Trains the model for one epoch. If it is the last epoch, it will stop at max_nb_steps iterations.
@@ -160,6 +162,7 @@ def train(
                 nb_examples_epoch=0
                 if nb_steps >= max_nb_steps:
                     break
+        scheduler.step()
         epsilon = privacy_engine.get_epsilon(args.delta)
         if is_main_worker:
             epsilons.append(epsilon)
@@ -233,6 +236,7 @@ def main():  ## for non poisson, divide bs by world size
     # Creating the privacy engine
     privacy_engine = PrivacyEngineAugmented(GradSampleModule.GRAD_SAMPLERS)
     sigma = get_noise_from_bs(args.batch_size, args.ref_noise, args.ref_B)
+    scheduler = ExponentialNoise(optimizer=optimizer, gamma=0.99)
 
     ##We use our PrivacyEngine Augmented to take into accoung the eventual augmentation multiplicity
     model, optimizer, train_loader = privacy_engine.make_private(
@@ -278,7 +282,8 @@ def main():  ## for non poisson, divide bs by world size
             is_main_worker,
             args,
             norms2_before_sigma,
-            nb_steps
+            nb_steps,
+            scheduler
         )
         if is_main_worker:
             print(f"epoch:{epoch}, Current loss:{losses[-1]:.2f},nb_steps:{nb_steps}, top1_acc of model (not ema){top1_accs[-1]:.2f},average gradient norm:{grad_sample_gradients_norms_per_step[-1]:.2f}")
