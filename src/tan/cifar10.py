@@ -137,6 +137,7 @@ def train(
                                     "loss": np.mean(losses[-args.freq_log :]),
                                     "grad_sample_gradients_norms": np.mean(grad_sample_norms),
                                     "grad_sample_gradients_norms_lowerC": np.mean(np.array(grad_sample_norms)<args.max_per_sample_grad_norm),
+                                    "epsilon": privacy_engine.get_epsilon(args.delta),
                                     #"norms2_before_sigma":list(norms2_before_sigma),
                                    # "grad_sample_gradients_norms_hist":list(np.histogram(grad_sample_norms,bins=np.arange(100), density=True)[0]),
                                 }
