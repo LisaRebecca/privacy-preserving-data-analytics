@@ -106,6 +106,10 @@ def train(
             train_acc_epoch.append(acc)
 
             loss.backward()
+            # TODO @Vicky/Lisa: grab gradient here, model.parameters -> iterate, for each param: parameter.grad
+            # use the norm of all parameter's gradients as a factor for the scheduler
+            # find an experimental rule what a big/small norm is!
+
             is_updated = not (optimizer._check_skip_next_step(pop_next=False))  # check if we are at the end of a true batch
 
             ## Logging gradient statistics on the main worker
@@ -114,7 +118,6 @@ def train(
                 per_sample_norms = (torch.stack(per_param_norms, dim=1).norm(2, dim=1).cpu().tolist())
                 grad_sample_norms += per_sample_norms[:l]  # in case of poisson sampling we dont want the 0s
 
-        
             optimizer.step()
             if is_updated:
                 nb_steps += 1  # ?
@@ -164,7 +167,8 @@ def train(
                 nb_examples_epoch=0
                 if nb_steps >= max_nb_steps:
                     break
-        scheduler.step()
+        scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
+        
         epsilon = privacy_engine.get_epsilon(args.delta)
         if is_main_worker:
             epsilons.append(epsilon)
@@ -246,6 +250,8 @@ def main():  ## for non poisson, divide bs by world size
         expected_batch_size=args.batch_size,
     )
 
+    # TODO @Vicky/Lisa : We can also use other schedulers, for example with the lamda scheduler we can write our own function whcih takes the gradient norms to influence the schedule
+    # TODO @Vicky/Lisa: we should probably also add this to the argparse run arguments thingy 
     scheduler = ExponentialNoise(optimizer=dp_optimizer, gamma=0.99)
 
     ##We use our PrivacyEngine Augmented to take into accoung the eventual augmentation multiplicity
