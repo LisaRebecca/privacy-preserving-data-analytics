@@ -242,6 +242,7 @@ def main():  ## for non poisson, divide bs by world size
         optimizer=optimizer,
         noise_multiplier=sigma,
         max_grad_norm=args.max_per_sample_grad_norm,
+        expected_batch_size=args.batch_size,
     )
 
     scheduler = ExponentialNoise(optimizer=optimizer, gamma=0.99)
