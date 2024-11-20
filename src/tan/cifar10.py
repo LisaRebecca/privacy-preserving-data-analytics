@@ -172,7 +172,9 @@ def train(
                     break
 
             if scheduler is not None:
+                print(f"Old noise multiplier {optimizer.noise_multiplier}")
                 scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
+                print(f"New noise multiplier {optimizer.noise_multiplier}")
         
         epsilon = privacy_engine.get_epsilon(args.delta)
         if is_main_worker:
