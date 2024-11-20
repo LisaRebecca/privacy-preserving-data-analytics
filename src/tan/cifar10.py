@@ -71,6 +71,8 @@ def train(
     If the model is being shadowed for EMA, we update the model at every step.
     """
     # nb_steps = nb_steps
+
+    print(type(optimizer))
     model.train()
     criterion = nn.CrossEntropyLoss()
     steps_per_epoch = len(train_loader)
@@ -169,8 +171,8 @@ def train(
                 if nb_steps >= max_nb_steps:
                     break
 
-        if scheduler is not None:
-            scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
+            if scheduler is not None:
+                scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
         
         epsilon = privacy_engine.get_epsilon(args.delta)
         if is_main_worker:
