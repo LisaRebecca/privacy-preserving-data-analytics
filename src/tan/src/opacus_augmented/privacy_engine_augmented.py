@@ -16,7 +16,7 @@ from opacus.distributed import DifferentiallyPrivateDistributedDataParallel as D
 #from opacus.grad_sample.grad_sample_module import GradSampleModule
 from src.opacus_augmented.grad_sample_module_augmented import GradSampleModuleAugmented
 from opacus.optimizers import DPOptimizer, get_optimizer_class
-from opacus.scheduler import _NoiseScheduler
+from opacus.schedulers import _NoiseScheduler
 from src.utils.utils import trainable_parameters
 from opacus.validators.module_validator import ModuleValidator
 from torch import nn, optim

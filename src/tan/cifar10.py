@@ -36,10 +36,16 @@ import json
 from src.models.prepare_models import prepare_data_cifar, prepare_augmult_cifar
 from torch.nn.parallel import DistributedDataParallel as DDP
 from opacus.distributed import DifferentiallyPrivateDistributedDataParallel as DPDDP
-from opacus.scheduler import ExponentialNoise
+from opacus.schedulers import ExponentialNoise
 from opacus.optimizers import DPOptimizer
+from opacus.accountants import RDPAccountant
 
 import warnings
+
+import csv
+import os
+import matplotlib.pyplot as plt
+from datetime import datetime
 
 warnings.simplefilter("ignore")
 
@@ -60,6 +66,7 @@ def train(
     epsilons,
     grad_sample_gradients_norms_per_epoch,
     test_loader,
+    save_gradients,
     is_main_worker,
     args,
     norms2_before_sigma,
@@ -77,7 +84,7 @@ def train(
     criterion = nn.CrossEntropyLoss()
     steps_per_epoch = len(train_loader)
     if is_main_worker:print(f"steps_per_epoch:{steps_per_epoch}")
-    losses_epoch, train_acc_epoch, grad_sample_norms = [], [], []
+    losses_epoch, train_acc_epoch, grad_sample_norms, max_grads, median_grads, mean_grads = [], [], [], [], [], []
     nb_examples_epoch = 0
     max_physical_batch_size_with_augnentation = (args.max_physical_batch_size if K == 0 else args.max_physical_batch_size // K)
     with BatchMemoryManager(data_loader=train_loader,max_physical_batch_size=max_physical_batch_size_with_augnentation,optimizer=optimizer) as memory_safe_data_loader:
@@ -115,10 +122,21 @@ def train(
             is_updated = not (optimizer._check_skip_next_step(pop_next=False))  # check if we are at the end of a true batch
 
             ## Logging gradient statistics on the main worker
-            if is_main_worker:
+            
+
+            if is_main_worker or save_gradients:
                 per_param_norms = [g.grad_sample.view(len(g.grad_sample), -1).norm(2, dim=-1) for g in model.parameters() if g.grad_sample is not None]
                 per_sample_norms = (torch.stack(per_param_norms, dim=1).norm(2, dim=1).cpu().tolist())
                 grad_sample_norms += per_sample_norms[:l]  # in case of poisson sampling we dont want the 0s
+
+                if save_gradients:
+                    median_grad = np.median(per_sample_norms[:l])
+                    max_grad = np.max(per_sample_norms[:l])
+                    mean_grad = np.mean(per_sample_norms[:l])
+                    median_grads.append(median_grad)
+                    max_grads.append(max_grad)
+                    mean_grads.append(mean_grad)
+                
 
             optimizer.step()
             if is_updated:
@@ -172,14 +190,18 @@ def train(
                     break
 
             if scheduler is not None:
+<<<<<<< Updated upstream
                 print(f"Old noise multiplier {optimizer.noise_multiplier}")
                 scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
                 print(f"New noise multiplier {optimizer.noise_multiplier}")
+=======
+                scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
+>>>>>>> Stashed changes
         
         epsilon = privacy_engine.get_epsilon(args.delta)
         if is_main_worker:
             epsilons.append(epsilon)
-        return nb_steps, norms2_before_sigma
+        return nb_steps, norms2_before_sigma, grad_sample_norms, max_grads, median_grads, mean_grads
 
 
 def test(model, test_loader, train_loader, device):
@@ -229,6 +251,8 @@ def test(model, test_loader, train_loader, device):
 def main():  ## for non poisson, divide bs by world size
 
     args = parse_args()
+    save_gradients = args.save_gradients
+    print(f"Das ist save_gradients:{save_gradients}")
     # init_distributed_mode(args)#Handle single and multi-GPU / multi-node]
     init_distributed_mode(args)
     logger = initialize_exp(args)
@@ -287,10 +311,12 @@ def main():  ## for non poisson, divide bs by world size
     E = get_epochs_from_bs(args.batch_size, args.ref_nb_steps, len(train_dataset))
     if is_main_worker: print(f"E:{E},sigma:{sigma}, BATCH_SIZE:{args.batch_size}, noise_multiplier:{sigma}, EPOCHS:{E}")
     nb_steps = 0
+    max_grads_it, mean_grads_it, median_grads_it = [], [], []
+    max_grads_epoch, mean_grads_epoch, median_grads_epoch = [], [], []
     for epoch in range(E):
         if nb_steps >= args.ref_nb_steps:
             break
-        nb_steps, norms2_before_sigma = train(
+        nb_steps, norms2_before_sigma, all_grad_norms, max_grads, median_grads, mean_grads = train(
             model,
             ema,
             train_loader,
@@ -306,13 +332,23 @@ def main():  ## for non poisson, divide bs by world size
             epsilons,
             grad_sample_gradients_norms_per_step,
             test_loader,
+            save_gradients,
             is_main_worker,
             args,
             norms2_before_sigma,
             nb_steps,
             scheduler
         )
-        if is_main_worker:
+        
+        if save_gradients:
+            max_grads_epoch.append(np.max(all_grad_norms))
+            mean_grads_epoch.append(np.mean(all_grad_norms))
+            median_grads_epoch.append(np.median(all_grad_norms))
+
+            max_grads_it += max_grads
+            mean_grads_it += mean_grads
+            median_grads_it += median_grads
+
             print(f"epoch:{epoch}, Current loss:{losses[-1]:.2f},nb_steps:{nb_steps}, top1_acc of model (not ema){top1_accs[-1]:.2f},average gradient norm:{grad_sample_gradients_norms_per_step[-1]:.2f}")
     if is_main_worker:
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size)
@@ -331,6 +367,60 @@ def main():  ## for non poisson, divide bs by world size
                     "final_train_acc_non_ema": train_acc,
                     "final_test_acc_non_ema": test_acc,
                 }))
+
+    if save_gradients:
+        print("Ich war hier!")
+        current_date = datetime.now().strftime("%Y-%b-%d %Hh%Mmin")
+        experiment_dir = f"./gradient_stats/{current_date}"
+        os.makedirs(experiment_dir, exist_ok=True)
+
+        csv_file_path_iteration = os.path.join(experiment_dir, "gradient_stats_iteration.csv")
+
+        # Initialize the CSV file with headers
+        with open(csv_file_path_iteration, mode="w", newline="") as f1:
+            csv_writer = csv.writer(f1)
+            csv_writer.writerow(["Iteration", "Median", "Max", "Mean"])
+            for i, (median, max_grad, mean) in enumerate(zip(median_grads_it, max_grads_it, mean_grads_it)):
+                csv_writer.writerow([i + 1, median, max_grad, mean])
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(median_grads_it, label="Median Gradients", color="orange")
+        plt.plot(mean_grads_it, label="Mean Gradients", color="blue")
+        plt.plot(max_grads_it, label="Max Gradients", color="red")
+        plt.xlabel("Iteration")
+        plt.ylabel("Gradient Norm")
+        plt.title("Gradient Statistics Over Iterations")
+        plt.legend()
+        plt.grid()
+        
+        # Save the plot
+        plot_file_path = os.path.join(experiment_dir, "gradient_stats_plot_iteration.png")
+        plt.savefig(plot_file_path)
+        plt.close()
+
+        csv_file_path_epoch = os.path.join(experiment_dir, "gradient_stats_epoch.csv")
+
+        # Initialize the CSV file with headers
+        with open(csv_file_path_epoch, mode="w", newline="") as f2:
+            csv_writer = csv.writer(f2)
+            csv_writer.writerow(["Epoch", "Median", "Max", "Mean"])
+            for i, (median, max_grad, mean) in enumerate(zip(median_grads_epoch, max_grads_epoch, mean_grads_epoch)):
+                csv_writer.writerow([i + 1, median, max_grad, mean])
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(median_grads_epoch, label="Median Gradients", color="orange")
+        plt.plot(mean_grads_epoch, label="Mean Gradients", color="blue")
+        plt.plot(max_grads_epoch, label="Max Gradients", color="red")
+        plt.xlabel("Epoch")
+        plt.ylabel("Gradient Norm")
+        plt.title("Gradient Statistics Over Epochs")
+        plt.legend()
+        plt.grid()
+        
+        # Save the plot
+        plot_file_path = os.path.join(experiment_dir, "gradient_stats_plot_epoch.png")
+        plt.savefig(plot_file_path)
+        plt.close()
 
 
 def parse_args():
@@ -376,6 +466,7 @@ def parse_args():
     parser.add_argument("--local_rank", type=int, default=-1)
     parser.add_argument("--master_port", type=int, default=-1)
     parser.add_argument("--debug_slurm", type=bool_flag, default=False)
+    parser.add_argument("--save_gradients", default=True)
     return parser.parse_args()
 
 
