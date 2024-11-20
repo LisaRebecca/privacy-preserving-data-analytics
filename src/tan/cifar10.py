@@ -171,10 +171,10 @@ def train(
                 if nb_steps >= max_nb_steps:
                     break
 
-            if scheduler is not None:
-                print(f"Old noise multiplier {optimizer.noise_multiplier}")
-                scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
-                print(f"New noise multiplier {optimizer.noise_multiplier}")
+            
+            print(f"Old noise multiplier {optimizer.noise_multiplier}")
+            scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
+            print(f"New noise multiplier {optimizer.noise_multiplier}")
         
         epsilon = privacy_engine.get_epsilon(args.delta)
         if is_main_worker:
@@ -259,9 +259,9 @@ def main():  ## for non poisson, divide bs by world size
 
     # TODO @Vicky/Lisa : We can also use other schedulers, for example with the lamda scheduler we can write our own function whcih takes the gradient norms to influence the schedule
     # TODO @Vicky/Lisa: we should probably also add this to the argparse run arguments thingy 
-    scheduler = None
+
     scheduler = ExponentialNoise(optimizer=dp_optimizer, gamma=args.noise_decay)
-    print("Using exponential noise scheduler")
+    logger.info("Using exponential noise scheduler")
     if args.noise_scheduler == "exponential":
         pass
         
