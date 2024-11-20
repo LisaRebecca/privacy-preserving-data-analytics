@@ -190,13 +190,9 @@ def train(
                     break
 
             if scheduler is not None:
-<<<<<<< Updated upstream
                 print(f"Old noise multiplier {optimizer.noise_multiplier}")
                 scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
                 print(f"New noise multiplier {optimizer.noise_multiplier}")
-=======
-                scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
->>>>>>> Stashed changes
         
         epsilon = privacy_engine.get_epsilon(args.delta)
         if is_main_worker:
@@ -273,32 +269,27 @@ def main():  ## for non poisson, divide bs by world size
     # Creating the privacy engine
     privacy_engine = PrivacyEngineAugmented(GradSampleModule.GRAD_SAMPLERS)
     sigma = get_noise_from_bs(args.batch_size, args.ref_noise, args.ref_B)
-    
-    dp_optimizer = DPOptimizer(
-        optimizer=optimizer,
-        noise_multiplier=sigma,
-        max_grad_norm=args.max_per_sample_grad_norm,
-        expected_batch_size=args.batch_size,
-    )
 
     # TODO @Vicky/Lisa : We can also use other schedulers, for example with the lamda scheduler we can write our own function whcih takes the gradient norms to influence the schedule
     # TODO @Vicky/Lisa: we should probably also add this to the argparse run arguments thingy 
-    scheduler = None
-    if args.noise_scheduler == "exponential":
-        scheduler = ExponentialNoise(optimizer=dp_optimizer, gamma=args.noise_decay)
-    if args.noise_scheduler == "gradientbased":
-        return NotImplementedError("Gradient-based scheduler not yet implemented")
 
     ##We use our PrivacyEngine Augmented to take into accoung the eventual augmentation multiplicity
     model, optimizer, train_loader = privacy_engine.make_private(
         module=model,
-        optimizer=dp_optimizer,
+        optimizer=optimizer,
         data_loader=train_loader,
         noise_multiplier=sigma,
         max_grad_norm=args.max_per_sample_grad_norm,
         poisson_sampling=args.poisson_sampling,
         K=args.transform
     )
+
+    scheduler = None
+    if args.noise_scheduler == "exponential":
+        scheduler = ExponentialNoise(optimizer=optimizer, gamma=args.noise_decay)
+    if args.noise_scheduler == "gradientbased":
+        return NotImplementedError("Gradient-based scheduler not yet implemented")
+    
     ## Changes the grad samplers to work with augmentation multiplicity
     prepare_augmult_cifar(model,args.transform)
     ema = None
