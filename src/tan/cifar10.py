@@ -263,7 +263,7 @@ def main():  ## for non poisson, divide bs by world size
     scheduler = ExponentialNoise(optimizer=dp_optimizer, gamma=args.noise_decay)
     print("Using exponential noise scheduler")
     if args.noise_scheduler == "exponential":
-        
+        pass
         
     if args.noise_scheduler == "gradientbased":
         return NotImplementedError("Gradient-based scheduler not yet implemented")
