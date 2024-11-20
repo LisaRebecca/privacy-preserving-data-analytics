@@ -260,14 +260,16 @@ def main():  ## for non poisson, divide bs by world size
     # TODO @Vicky/Lisa : We can also use other schedulers, for example with the lamda scheduler we can write our own function whcih takes the gradient norms to influence the schedule
     # TODO @Vicky/Lisa: we should probably also add this to the argparse run arguments thingy 
     scheduler = None
+    scheduler = ExponentialNoise(optimizer=dp_optimizer, gamma=args.noise_decay)
+    print("Using exponential noise scheduler")
     if args.noise_scheduler == "exponential":
-        print("Using exponential noise scheduler")
-        scheduler = ExponentialNoise(optimizer=dp_optimizer, gamma=args.noise_decay)
+        
+        
     if args.noise_scheduler == "gradientbased":
         return NotImplementedError("Gradient-based scheduler not yet implemented")
 
     ##We use our PrivacyEngine Augmented to take into accoung the eventual augmentation multiplicity
-    model, optimizer, train_loader = privacy_engine.make_private(
+    model, dp_optimizer, train_loader = privacy_engine.make_private(
         module=model,
         optimizer=dp_optimizer,
         data_loader=train_loader,
@@ -295,7 +297,7 @@ def main():  ## for non poisson, divide bs by world size
             model,
             ema,
             train_loader,
-            optimizer,
+            dp_optimizer,
             epoch,
             args.ref_nb_steps,
             rank,
