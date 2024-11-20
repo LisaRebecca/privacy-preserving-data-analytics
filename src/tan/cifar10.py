@@ -64,7 +64,7 @@ def train(
     args,
     norms2_before_sigma,
     nb_steps,
-    scheduler=None,
+    scheduler,
 ):
     """
     Trains the model for one epoch. If it is the last epoch, it will stop at max_nb_steps iterations.
@@ -261,6 +261,7 @@ def main():  ## for non poisson, divide bs by world size
     # TODO @Vicky/Lisa: we should probably also add this to the argparse run arguments thingy 
     scheduler = None
     if args.noise_scheduler == "exponential":
+        print("Using exponential noise scheduler")
         scheduler = ExponentialNoise(optimizer=dp_optimizer, gamma=args.noise_decay)
     if args.noise_scheduler == "gradientbased":
         return NotImplementedError("Gradient-based scheduler not yet implemented")
