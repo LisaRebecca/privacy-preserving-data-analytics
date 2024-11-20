@@ -270,7 +270,7 @@ def main():  ## for non poisson, divide bs by world size
         return NotImplementedError("Gradient-based scheduler not yet implemented")
 
     ##We use our PrivacyEngine Augmented to take into accoung the eventual augmentation multiplicity
-    model, dp_optimizer, train_loader = privacy_engine.make_private(
+    model, _, train_loader = privacy_engine.make_private(
         module=model,
         optimizer=dp_optimizer,
         data_loader=train_loader,
