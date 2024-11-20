@@ -64,7 +64,7 @@ def train(
     args,
     norms2_before_sigma,
     nb_steps,
-    scheduler,
+    scheduler=None,
 ):
     """
     Trains the model for one epoch. If it is the last epoch, it will stop at max_nb_steps iterations.
@@ -167,7 +167,9 @@ def train(
                 nb_examples_epoch=0
                 if nb_steps >= max_nb_steps:
                     break
-        scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
+
+        if scheduler is not None:
+            scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
         
         epsilon = privacy_engine.get_epsilon(args.delta)
         if is_main_worker:
@@ -252,7 +254,11 @@ def main():  ## for non poisson, divide bs by world size
 
     # TODO @Vicky/Lisa : We can also use other schedulers, for example with the lamda scheduler we can write our own function whcih takes the gradient norms to influence the schedule
     # TODO @Vicky/Lisa: we should probably also add this to the argparse run arguments thingy 
-    scheduler = ExponentialNoise(optimizer=dp_optimizer, gamma=0.99)
+    scheduler = None
+    if args.noise_scheduler == "exponential":
+        scheduler = ExponentialNoise(optimizer=dp_optimizer, gamma=args.noise_decay)
+    if args.noise_scheduler == "gradientbased":
+        return NotImplementedError("Gradient-based scheduler not yet implemented")
 
     ##We use our PrivacyEngine Augmented to take into accoung the eventual augmentation multiplicity
     model, optimizer, train_loader = privacy_engine.make_private(
@@ -340,6 +346,9 @@ def parse_args():
     parser.add_argument("--ref_B",type=int,default=4096,help="reference batch size used with reference noise and number of steps to create our physical constant",)
     parser.add_argument("--nb_groups",type=int,default=16,help="number of groups for the group norms",)
     parser.add_argument("--ref_nb_steps",default=2500,type=int,help="reference number of steps used with reference noise and batch size to create our physical constant",)
+    parser.add_argument("--noise_scheduler",type=str,default=None,help="Noise scheduler: [None, exponential, gradientbased]",)
+    parser.add_argument("--noise_decay",type=float,default=0.99,help="Noise decay for exponential noise scheduler",)
+
     parser.add_argument("--data_root",type=str,default="",help="Where CIFAR10 is/will be stored",)
     parser.add_argument("--dump_path",type=str,default="",help="Where results will be stored",)
     parser.add_argument("--transform",type=int,default=0,help="using augmentation multiplicity",)
