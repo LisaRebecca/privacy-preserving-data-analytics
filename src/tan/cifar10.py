@@ -361,7 +361,6 @@ def main():  ## for non poisson, divide bs by world size
                 }))
 
     if save_gradients:
-        print("Ich war hier!")
         current_date = datetime.now().strftime("%Y-%b-%d %Hh%Mmin")
         experiment_dir = f"./gradient_stats/{current_date}"
         os.makedirs(experiment_dir, exist_ok=True)
