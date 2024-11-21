@@ -84,7 +84,7 @@ def train(
     criterion = nn.CrossEntropyLoss()
     steps_per_epoch = len(train_loader)
     if is_main_worker:print(f"steps_per_epoch:{steps_per_epoch}")
-    losses_epoch, train_acc_epoch, grad_sample_norms, max_grads, median_grads, mean_grads = [], [], [], [], [], []
+    losses_epoch, train_acc_epoch, grad_sample_norms, max_grads, median_grads, min_grads, all_norms = [], [], [], [], [], [], []
     nb_examples_epoch = 0
     max_physical_batch_size_with_augnentation = (args.max_physical_batch_size if K == 0 else args.max_physical_batch_size // K)
     with BatchMemoryManager(data_loader=train_loader,max_physical_batch_size=max_physical_batch_size_with_augnentation,optimizer=optimizer) as memory_safe_data_loader:
@@ -128,14 +128,15 @@ def train(
                 per_param_norms = [g.grad_sample.view(len(g.grad_sample), -1).norm(2, dim=-1) for g in model.parameters() if g.grad_sample is not None]
                 per_sample_norms = (torch.stack(per_param_norms, dim=1).norm(2, dim=1).cpu().tolist())
                 grad_sample_norms += per_sample_norms[:l]  # in case of poisson sampling we dont want the 0s
+                all_norms += per_sample_norms[:l]
 
                 if save_gradients:
                     median_grad = np.median(per_sample_norms[:l])
                     max_grad = np.max(per_sample_norms[:l])
-                    mean_grad = np.mean(per_sample_norms[:l])
+                    min_grad = np.min(per_sample_norms[:l])
                     median_grads.append(median_grad)
                     max_grads.append(max_grad)
-                    mean_grads.append(mean_grad)
+                    min_grads.append(min_grad)
                 
 
             optimizer.step()
@@ -197,7 +198,7 @@ def train(
         epsilon = privacy_engine.get_epsilon(args.delta)
         if is_main_worker:
             epsilons.append(epsilon)
-        return nb_steps, norms2_before_sigma, grad_sample_norms, max_grads, median_grads, mean_grads
+        return nb_steps, norms2_before_sigma, all_norms, max_grads, median_grads, min_grads
 
 
 def test(model, test_loader, train_loader, device):
@@ -302,12 +303,12 @@ def main():  ## for non poisson, divide bs by world size
     E = get_epochs_from_bs(args.batch_size, args.ref_nb_steps, len(train_dataset))
     if is_main_worker: print(f"E:{E},sigma:{sigma}, BATCH_SIZE:{args.batch_size}, noise_multiplier:{sigma}, EPOCHS:{E}")
     nb_steps = 0
-    max_grads_it, mean_grads_it, median_grads_it = [], [], []
-    max_grads_epoch, mean_grads_epoch, median_grads_epoch = [], [], []
+    max_grads_it, min_grads_it, median_grads_it = [], [], []
+    max_grads_epoch, min_grads_epoch, median_grads_epoch = [], [], []
     for epoch in range(E):
         if nb_steps >= args.ref_nb_steps:
             break
-        nb_steps, norms2_before_sigma, all_grad_norms, max_grads, median_grads, mean_grads = train(
+        nb_steps, norms2_before_sigma, all_grad_norms, max_grads, median_grads, min_grads = train(
             model,
             ema,
             train_loader,
@@ -333,11 +334,11 @@ def main():  ## for non poisson, divide bs by world size
         
         if save_gradients:
             max_grads_epoch.append(np.max(all_grad_norms))
-            mean_grads_epoch.append(np.mean(all_grad_norms))
+            min_grads_epoch.append(np.min(all_grad_norms))
             median_grads_epoch.append(np.median(all_grad_norms))
 
             max_grads_it += max_grads
-            mean_grads_it += mean_grads
+            min_grads_it += min_grads
             median_grads_it += median_grads
 
             print(f"epoch:{epoch}, Current loss:{losses[-1]:.2f},nb_steps:{nb_steps}, top1_acc of model (not ema){top1_accs[-1]:.2f},average gradient norm:{grad_sample_gradients_norms_per_step[-1]:.2f}")
@@ -370,13 +371,13 @@ def main():  ## for non poisson, divide bs by world size
         # Initialize the CSV file with headers
         with open(csv_file_path_iteration, mode="w", newline="") as f1:
             csv_writer = csv.writer(f1)
-            csv_writer.writerow(["Iteration", "Median", "Max", "Mean"])
-            for i, (median, max_grad, mean) in enumerate(zip(median_grads_it, max_grads_it, mean_grads_it)):
+            csv_writer.writerow(["Iteration", "Median", "Max", "Min"])
+            for i, (median, max_grad, mean) in enumerate(zip(median_grads_it, max_grads_it, min_grads_it)):
                 csv_writer.writerow([i + 1, median, max_grad, mean])
 
         plt.figure(figsize=(10, 6))
         plt.plot(median_grads_it, label="Median Gradients", color="orange")
-        plt.plot(mean_grads_it, label="Mean Gradients", color="blue")
+        plt.plot(min_grads_it, label="Min Gradients", color="blue")
         plt.plot(max_grads_it, label="Max Gradients", color="red")
         plt.xlabel("Iteration")
         plt.ylabel("Gradient Norm")
@@ -394,13 +395,13 @@ def main():  ## for non poisson, divide bs by world size
         # Initialize the CSV file with headers
         with open(csv_file_path_epoch, mode="w", newline="") as f2:
             csv_writer = csv.writer(f2)
-            csv_writer.writerow(["Epoch", "Median", "Max", "Mean"])
-            for i, (median, max_grad, mean) in enumerate(zip(median_grads_epoch, max_grads_epoch, mean_grads_epoch)):
+            csv_writer.writerow(["Epoch", "Median", "Max", "Min"])
+            for i, (median, max_grad, mean) in enumerate(zip(median_grads_epoch, max_grads_epoch, min_grads_epoch)):
                 csv_writer.writerow([i + 1, median, max_grad, mean])
 
         plt.figure(figsize=(10, 6))
         plt.plot(median_grads_epoch, label="Median Gradients", color="orange")
-        plt.plot(mean_grads_epoch, label="Mean Gradients", color="blue")
+        plt.plot(min_grads_epoch, label="Min Gradients", color="blue")
         plt.plot(max_grads_epoch, label="Max Gradients", color="red")
         plt.xlabel("Epoch")
         plt.ylabel("Gradient Norm")
