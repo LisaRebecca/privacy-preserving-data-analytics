@@ -384,7 +384,6 @@ def parse_args():
     parser.add_argument("--local_rank", type=int, default=-1)
     parser.add_argument("--master_port", type=int, default=-1)
     parser.add_argument("--debug_slurm", type=bool_flag, default=False)
-    parser.add_argument("--save_gradients", default=True)
     return parser.parse_args()
 
 
