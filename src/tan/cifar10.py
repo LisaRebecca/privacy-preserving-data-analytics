@@ -174,7 +174,7 @@ def train(
             
             print(f"Old noise multiplier {optimizer.noise_multiplier}")
             scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
-            optimizer.noise_multiplier *= 0.99
+            optimizer.noise_multiplier = scheduler.get_noise_multiplier()
             print(f"New noise multiplier {optimizer.noise_multiplier}")
         
         epsilon = privacy_engine.get_epsilon(args.delta)
