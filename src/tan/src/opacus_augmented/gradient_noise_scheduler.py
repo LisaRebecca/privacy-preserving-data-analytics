@@ -2,6 +2,7 @@ from typing import Dict
 
 from opacus.optimizers import DPOptimizer
 
+import numpy as np
 
 class GradientRatioScheduler:
 
@@ -19,10 +20,8 @@ class GradientRatioScheduler:
             )
         self.optimizer = optimizer
         self.last_epoch = last_epoch
-        self.first_epoch_grad = -1
         self.initial_noise_multiplier = optimizer.noise_multiplier
-
-        self.step()
+        self.relative_gradients = []
 
     def state_dict(self) -> Dict:
         """Returns the state of the scheduler as a :class:`dict`.
@@ -44,13 +43,12 @@ class GradientRatioScheduler:
         self.__dict__.update(state_dict)
 
     def get_noise_multiplier(self, gradient_norm):
-        return (gradient_norm/self.first_epoch_grad) * self.initial_noise_multiplier
-    
-    def set_first_epoch_grad(self, gradient_norm):
-        if self.first_epoch_grad != -1:
-            raise ValueError("The gradient norm of the first epoch has already been set!")
-        else:
-            self.first_epoch_grad = gradient_norm
+        if len(self.relative_gradients) == 0:
+            raise ValueError("No relative gradients have been added!")
+        return (gradient_norm/np.mean(self.relative_gradients)) * self.initial_noise_multiplier
+
+    def add_relative_gradient(self, gradient_norm):
+        self.relative_gradients.append(gradient_norm)
 
     def step(self, gradient_norm):
         self.last_epoch += 1
@@ -74,8 +72,6 @@ class GradientRuleScheduler:
             )
         self.optimizer = optimizer
         self.last_epoch = last_epoch
-
-        self.step()
 
     def state_dict(self) -> Dict:
         """Returns the state of the scheduler as a :class:`dict`.

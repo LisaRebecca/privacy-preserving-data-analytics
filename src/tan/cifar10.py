@@ -39,7 +39,7 @@ from opacus.distributed import DifferentiallyPrivateDistributedDataParallel as D
 from opacus.schedulers import ExponentialNoise
 from opacus.optimizers import DPOptimizer
 from opacus.accountants import RDPAccountant
-
+from src.opacus_augmented.gradient_noise_scheduler import GradientRatioScheduler, GradientRuleScheduler
 import warnings
 
 import csv
@@ -123,11 +123,13 @@ def train(
             ## Logging gradient statistics on the main worker
             
 
-            if is_main_worker:
+            if is_main_worker or scheduler is not None:
                 per_param_norms = [g.grad_sample.view(len(g.grad_sample), -1).norm(2, dim=-1) for g in model.parameters() if g.grad_sample is not None]
                 per_sample_norms = (torch.stack(per_param_norms, dim=1).norm(2, dim=1).cpu().tolist())
                 grad_sample_norms += per_sample_norms[:l]  # in case of poisson sampling we dont want the 0s
-
+                median_grad_norms = np.median(grad_sample_norms)
+                if isinstance(scheduler, GradientRatioScheduler) and nb_steps <= 10:
+                    scheduler.add_relative_gradient(median_grad_norms)
 
             optimizer.step()
             if is_updated:
@@ -185,7 +187,10 @@ def train(
 
             if scheduler is not None:
                 print(f"Old noise multiplier {optimizer.noise_multiplier}")
-                scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
+                if isinstance(scheduler, GradientRatioScheduler) or isinstance(scheduler, GradientRuleScheduler):
+                    scheduler.step(median_grad_norms)
+                else:
+                    scheduler.step() # TODO @Vicky/Lisa: we need to find out whether we should call the scheduler step after each epoch or iteration!  Consider how this is done in dynamicsgd, maybe that works best?
                 print(f"New noise multiplier {optimizer.noise_multiplier}")
         
         epsilon = privacy_engine.get_epsilon(args.delta)
@@ -279,8 +284,10 @@ def main():  ## for non poisson, divide bs by world size
     scheduler = None
     if args.noise_scheduler == "exponential":
         scheduler = ExponentialNoise(optimizer=optimizer, gamma=args.noise_decay)
-    if args.noise_scheduler == "gradientbased":
-        return NotImplementedError("Gradient-based scheduler not yet implemented")
+    if args.noise_scheduler == "gradientratio":
+        scheduler = GradientRatioScheduler(optimizer=optimizer)
+    if args.noise_scheduler == "gradientrule":
+        scheduler = GradientRuleScheduler(optimizer=optimizer)
     
     ## Changes the grad samplers to work with augmentation multiplicity
     prepare_augmult_cifar(model,args.transform)
