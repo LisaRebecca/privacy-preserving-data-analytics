@@ -49,6 +49,20 @@ from datetime import datetime
 
 warnings.simplefilter("ignore")
 
+def get_average_sgd_norm(optimizer: DPOptimizer):
+    total_norm = 0
+    total_params = 0
+    
+    for p in optimizer.params:
+        if p.grad is not None:
+            param_norm = torch.norm(p.grad)
+            total_norm += param_norm.item()
+    
+    # Compute the average norm
+    if total_params > 0:
+        return total_norm / total_params
+    else:
+        return 0
 
 def train(
     model,
@@ -102,6 +116,8 @@ def train(
                 images = transforms.Lambda(lambda x: torch.stack([transform(x_) for x_ in x]))(images_duplicates)
                 assert len(images) == args.transform * l
 
+            # get the SGD 
+
             # compute output
             output = model(images)
             loss = criterion(output, target)
@@ -132,6 +148,7 @@ def train(
                     scheduler.add_relative_gradient(median_grad_norms)
 
             optimizer.step()
+            average_sgd_norm = get_average_sgd_norm(optimizer)
             if is_updated:
                 nb_steps += 1  # ?
                 if ema:
@@ -157,7 +174,8 @@ def train(
                                     "noise_multiplier": optimizer.noise_multiplier,
                                     "grad_gradients_median":np.median(grad_sample_norms),
                                     "grad_gradients_max":np.max(grad_sample_norms),
-                                    "grad_gradients_min": np.min(grad_sample_norms)
+                                    "grad_gradients_min": np.min(grad_sample_norms),
+                                    "average_sgd_norm": average_sgd_norm
                                     #"norms2_before_sigma":list(norms2_before_sigma),
                                    # "grad_sample_gradients_norms_hist":list(np.histogram(grad_sample_norms,bins=np.arange(100), density=True)[0]),
                                 }
