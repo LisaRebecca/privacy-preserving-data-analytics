@@ -93,11 +93,11 @@ class GradientRuleScheduler:
         self.__dict__.update(state_dict)
 
     def get_noise_multiplier(self, gradient_norm):
-        if gradient_norm >= 12:
-            return 5
-        elif gradient_norm <= 9:
-            return 2
-        return 1
+        if gradient_norm >= 12.25:
+            return 0.375 # equals to noise power 6
+        elif gradient_norm >= 11.75:
+            return 0.3125 # equals to noise power 5
+        return 0.125 # equals to noise power 
 
     def step(self, gradient_norm):
         self.last_epoch += 1
